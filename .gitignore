@@ -21,6 +21,7 @@
 *.dylib
 
 # Executables
+gadget_file_splitter
 *.exe
 *.out
 *.app
