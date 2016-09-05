@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#define _XOPEN_SOURCE 600
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "utils.h"
 #include "handle_gadget.h"
@@ -53,6 +58,7 @@ int64_t count_total_number_of_particles(const char *filebase, const int nfiles)
         /* Check that this is a dark matter only */
         for(int type=0;type<6;type++) {
             if(type == 1) continue;
+            
 
             if(hdr.npart[type] > 0) {
                 fprintf(stderr,"Error: This code is only meant to convert dark matter only sims.\n"
@@ -61,11 +67,41 @@ int64_t count_total_number_of_particles(const char *filebase, const int nfiles)
                 return EXIT_FAILURE;
             }
         }
+
+        /* So we have a dark-matter only simulation. Check that dark matter
+           mass array is not 0.0 (i,e. particles don't have individual masses)*/
+        if(hdr.mass[1] <= 0.0) {
+            fprintf(stderr,"Error: This code can not handle dark matter particles with individual masses\n");
+            return EXIT_FAILURE;
+        }
+        
         totnumpart += hdr.npart[1];
     }
 
     return totnumpart;
 }
 
+int generate_file_skeleton(const char *outfile, const size_t numpart, const size_t id_bytes)
+{
+    /* Reserve disk space for a Gadget file */
+    int fd = open(outfile, O_CREAT | O_TRUNC | O_WRONLY);
+    if(fd < 0) {
+        fprintf(stderr,"Error: During reserving space for file = `%s'\n",outfile);
+        perror(NULL);
+        return EXIT_FAILURE;
+    }
 
+    off_t totbytes = 2*(numpart * sizeof(float) * 3 + 2*sizeof(int)) +
+        numpart * id_bytes + 2*sizeof(int) + sizeof(struct io_header) + 2*sizeof(int);
+    int status = posix_fallocate(fd, 0, totbytes);
+    if(status!= 0) {
+        fprintf(stderr,"Error: While trying to reserve disk space = %zu bytes for file = `%s' \n"
+                "posix_fallocate returned error status = %d\n", totbytes, outfile, status);
+        perror(NULL);
+        return EXIT_FAILURE;
+    }
+    close(fd);
+
+    return EXIT_SUCCESS;
+}
 

@@ -3,7 +3,7 @@ CC:=gcc
 TARGET:=gadget_file_splitter
 SRC:=main.c filesplitter.c utils.c handle_gadget.c
 OBJS:=$(SRC:.c=.o)
-INCL:=filesplitter.h utils.h handle_gadget.h
+INCL:=filesplitter.h utils.h handle_gadget.h gadget_defs.h
 
 OPTIONS:=
 OPTIMIZE:=-O3
