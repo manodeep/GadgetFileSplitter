@@ -279,6 +279,7 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
 	  if(status != EXIT_SUCCESS) {
 		return status;
 	  }
+	  interrupted=1;
     }
 	finish_myprogressbar(&interrupted);
 

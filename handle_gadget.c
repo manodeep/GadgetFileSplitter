@@ -119,8 +119,8 @@ int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t 
     
     /* Copy the pos/vel/id */
     for(field_type field = POS; field < NUM_FIELDS; field++) {
-        const off_t output_offset = get_offset_from_npart(nwritten, field);
-        const off_t input_offset = get_offset_from_npart(start, field);
+	  const off_t output_offset = get_offset_from_npart(nwritten, field) + sizeof(int);
+	  const off_t input_offset = get_offset_from_npart(start, field) + sizeof(int);
         if(input_offset < 0 || output_offset < 0) {
             return EXIT_FAILURE;
         }
@@ -140,7 +140,7 @@ int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t 
 
 int gadget_snapshot_create(const char *filebase, const char *outfilename, struct file_mapping *fmap, const size_t id_bytes)
 {
-    int status = generate_file_skeleton(outfilename, fmap->numpart, id_bytes);
+  int status = check_if_file_exists(outfilename);
     if(status != EXIT_SUCCESS) {
         return status;
     }
@@ -171,6 +171,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
     fclose(fp);//closed output file
 
     int out_fd = open(outfilename, O_WRONLY);
+	fprintf(stderr,"\n");
     for(int64_t i=0;i<fmap->numfiles;i++) {
         char filename[MAXLEN];
         my_snprintf(filename, MAXLEN, "%s.%d", filebase, fmap->input_file_id[i]);
@@ -414,46 +415,16 @@ int64_t count_total_number_of_particles(const char *filebase, int32_t nfiles, in
     return totnumpart;
 }
 
-
-
-int generate_file_skeleton(const char *outfile, const size_t numpart, const size_t id_bytes)
+int check_if_file_exists(const char *outfile)
 {
-    {
-        /* Check that I am not accidentally over-writing some files*/
-        FILE *fp = fopen(outfile, "r");
-        if(fp != NULL) {
-            fprintf(stderr,"Error: Expected output file = `%s' to not exist. Aborting in case there is some error (and avoiding )"
-                    "valuable snapshots getting accidentally overwritten)\n",outfile);
-            fclose(fp);
-            return EXIT_FAILURE;
-        }
-    }
-
-	return EXIT_SUCCESS;
-    /* /\* Reserve disk space for a Gadget file *\/ */
-    /* int fd = open(outfile, O_CREAT | O_TRUNC | O_WRONLY); */
-    /* if(fd < 0) { */
-    /*     fprintf(stderr,"Error: During reserving space for file = `%s'\n",outfile); */
-    /*     perror(NULL); */
-    /*     return EXIT_FAILURE; */
-    /* } */
-
-    /* off_t totbytes = 2*(numpart * sizeof(float) * 3 + 2*sizeof(int)) + */
-    /*     numpart * id_bytes + 2*sizeof(int) + sizeof(struct io_header) + 2*sizeof(int); */
-	/* fprintf(stderr,"Trying to reserve %zu bytes for %zu particles in file `%s'\n",totbytes, numpart, outfile); */
-    /* int status = posix_fallocate(fd, 0, totbytes); */
-    /* if(status!= 0) { */
-    /*     fprintf(stderr,"Error: While trying to reserve disk space = %zu bytes for file = `%s' \n" */
-    /*             "posix_fallocate returned error status = %d\n", totbytes, outfile, status); */
-    /*     perror(NULL); */
-    /*     return EXIT_FAILURE; */
-    /* } */
-    /* if(close(fd) != 0){ */
-    /*     fprintf(stderr,"Error: While trying to close file descriptor after reserving disk space\n"); */
-    /*     perror(NULL); */
-	/* 	return EXIT_FAILURE; */
-    /* }; */
-    
-    /* return EXIT_SUCCESS; */
+  /* Check that I am not accidentally over-writing some files*/
+  FILE *fp = fopen(outfile, "r");
+  if(fp != NULL) {
+	fprintf(stderr,"Error: Expected output file = `%s' to not exist. Aborting in case there is some error (and avoiding )"
+			"valuable snapshots getting accidentally overwritten)\n",outfile);
+	fclose(fp);
+	return EXIT_FAILURE;
+  }
+  return EXIT_SUCCESS;
 }
 
