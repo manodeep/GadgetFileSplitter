@@ -4,9 +4,14 @@
 
 #include "filesplitter.h"
 
-int filesplitter(int in_fd, int out_fd, off_t in_offset, off_t out_offset, const size_t bytes, void *userbuf, const size_t bufsize)
+int filesplitter(int in_fd, int out_fd, off_t in_offset, off_t out_offset, const size_t bytes, void *userbuf, const size_t bufsize, const file_copy_options option)
 {
-    return copy_bytes_with_preadwrite(in_fd, out_fd, in_offset, out_offset, bytes, userbuf, bufsize);
+  switch(option) {
+  case(PRDWR):return copy_bytes_with_preadwrite(in_fd, out_fd, in_offset, out_offset, bytes, userbuf, bufsize);
+  /* case(MEMCP):return memcopy_bytes(in_fd, out_fd, in_offset, out_offset, bytes, userbuf, bufsize); */
+  default: fprintf(stderr,"Error: option = %u for copying files is not implemented\n",option);break;
+  }
+  return EXIT_FAILURE;
 }
 
 int write_bytes(int out_fd, void *buf, const size_t bytes, off_t out_offset)
