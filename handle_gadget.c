@@ -12,6 +12,7 @@
 #include "split_gadget.h"
 #include "filesplitter.h"
 #include "progressbar.h"
+#include "mpi_wrapper.h"
 
 #define MAXLEN (1024)
 
@@ -369,10 +370,13 @@ int64_t count_total_number_of_particles(const char *filebase, int32_t nfiles, in
         return EXIT_FAILURE;
     }
 	int interrupted=0;
-    
-	init_my_progressbar(nfiles, &interrupted);
+    if(ThisTask == 0) {
+	  init_my_progressbar(nfiles, &interrupted);
+	}
     for(int32_t ifile=0;ifile<nfiles;ifile++) {
-	  my_progressbar(ifile, &interrupted);
+	  if(ThisTask == 0) {
+		my_progressbar(ifile, &interrupted);
+	  }
         char filename[MAXLEN];
         my_snprintf(filename,MAXLEN,"%s.%d",filebase,ifile);
         struct io_header hdr;
@@ -410,7 +414,9 @@ int64_t count_total_number_of_particles(const char *filebase, int32_t nfiles, in
         totnumpart += hdr.npart[1];
         numpart_in_input_file[ifile] = hdr.npart[1];
     }
-	finish_myprogressbar(&interrupted);
+	if(ThisTask == 0) {
+	  finish_myprogressbar(&interrupted);
+	}
 
     return totnumpart;
 }

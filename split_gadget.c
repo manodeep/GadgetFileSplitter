@@ -13,6 +13,8 @@
 #define MAXLEN (1024)
 #endif
 
+#include "mpi_wrapper.h"
+
 int allocate_file_mapping(struct file_mapping *fmap, const int64_t numfiles)
 {
     if(fmap == NULL) {
@@ -88,10 +90,15 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
                 bytes);
         return EXIT_FAILURE;
     }
-    int64_t totnumpart = count_total_number_of_particles(filebase, num_input_files, numpart_in_input_file);
-    fprintf(stdout,"Found %"PRId64" dark matter particles spread over %d input files\n",
-            totnumpart, num_input_files);
-	fflush(stdout);
+
+	int64_t totnumpart = count_total_number_of_particles(filebase, num_input_files, numpart_in_input_file);
+	if(ThisTask == 0) {
+	  fprintf(stderr,"Found %"PRId64" dark matter particles spread over %d input files\n",
+			  totnumpart, num_input_files);
+	}
+#ifdef USE_MPI
+	MPI_Barrier(MPI_COMM_WORLD);
+#endif
 
     {
         /* Check that it is possible to split/merge the snapshot into the requested
@@ -187,7 +194,9 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
         fmap[out].numpart = npart;
         
         int32_t numpart_written_this_file = 0;
-		fprintf(stderr,ANSI_COLOR_GREEN "%5d \t ", out);
+		if(ThisTask == 0) {
+		  fprintf(stderr,ANSI_COLOR_GREEN "%5d \t ", out);
+		}
         for(int i=0;i<numfiles;i++) {
             const int this_inp = start_inp + i;
             fmap[out].input_file_id[i] = this_inp;
@@ -248,16 +257,20 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
 
 			fmap[out].output_file_nwritten[i] = numpart_written_this_file;
             numpart_written_this_file += fmap[out].input_file_end_particle[i] - fmap[out].input_file_start_particle[i];
-			if(fmap[out].input_file_end_particle[i] == numpart_in_input_file[this_inp] &&
-			   fmap[out].input_file_start_particle[i] == 0) {
-			  /*Writing out all particles in this input file */
-			  fprintf(stderr," %5d"ANSI_COLOR_RESET", "ANSI_COLOR_BLUE ANSI_BOLD_FONT"<---all---> \t "ANSI_COLOR_GREEN, this_inp);
-			} else {
-			  fprintf(stderr," %5d"ANSI_COLOR_RESET", "ANSI_COLOR_BLUE"[%08d, %08d)/"ANSI_COLOR_MAGENTA"%09d \t "ANSI_COLOR_GREEN, this_inp, fmap[out].input_file_start_particle[i],
-					  fmap[out].input_file_end_particle[i], numpart_in_input_file[this_inp]);
+			if(ThisTask == 0) {
+			  if(fmap[out].input_file_end_particle[i] == numpart_in_input_file[this_inp] &&
+				 fmap[out].input_file_start_particle[i] == 0) {
+				/*Writing out all particles in this input file */
+				fprintf(stderr," %5d"ANSI_COLOR_RESET", "ANSI_COLOR_BLUE ANSI_BOLD_FONT"<---all---> \t "ANSI_COLOR_GREEN, this_inp);
+			  } else {
+				fprintf(stderr," %5d"ANSI_COLOR_RESET", "ANSI_COLOR_BLUE"[%08d, %08d)/"ANSI_COLOR_MAGENTA"%09d \t "ANSI_COLOR_GREEN, this_inp, fmap[out].input_file_start_particle[i],
+						fmap[out].input_file_end_particle[i], numpart_in_input_file[this_inp]);
+			  }
 			}
-        }
-		fprintf(stderr,ANSI_COLOR_RESET"\n");
+		}
+		if(ThisTask == 0) {
+		  fprintf(stderr,ANSI_COLOR_RESET"\n");
+		}
     }
 	/* finish_myprogressbar(&interrupted); */
 
@@ -269,19 +282,33 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
 
 
 	/* Particle mappings have been generated -> now do the actual data-transfer */
-	int interrupted=0;
-	init_my_progressbar(noutfiles, &interrupted);
-    for(int i=0;i<noutfiles;i++) {
-	  my_progressbar(i, &interrupted);
+	int interrupted=0, numdone=0, totnumdone=0;
+	
+	if(ThisTask == 0) {
+	  init_my_progressbar(noutfiles, &interrupted);
+	}
+    for(int i=0 + ThisTask;i<noutfiles;i+=Ntasks) {
+	
 	  char filename[MAXLEN];
 	  my_snprintf(filename, MAXLEN, "%s.%d", outfilebase,i);
 	  int status = gadget_snapshot_create(filebase, filename, &fmap[i], (size_t) id_bytes);
 	  if(status != EXIT_SUCCESS) {
 		return status;
 	  }
+	  numdone++;
+#ifdef USE_MPI
+	  MPI_Allreduce(&numdone, &totnumdone, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+#else
+	  totnumdone = numdone;
+#endif
 	  interrupted=1;
+	  if(ThisTask == 0) {
+		my_progressbar(totnumdone, &interrupted);
+	  }
     }
-	finish_myprogressbar(&interrupted);
+	if(ThisTask == 0){
+	  finish_myprogressbar(&interrupted);
+	}
 
     free(numpart_in_input_file);
     for(int i=0;i<noutfiles;i++){

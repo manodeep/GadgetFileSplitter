@@ -5,12 +5,24 @@
 
 void Printhelp(void);
 
+#include "mpi_wrapper.h"
+
 int main(int argc, char **argv)
 {
     char *input_filebase=NULL, *output_filebase=NULL;
     int noutfiles;
     const char argnames[][30]={"input_filebase","output_filebase","noutfiles"};
     int nargs=sizeof(argnames)/(sizeof(char)*30);
+
+#ifdef USE_MPI
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
+	MPI_Comm_size(MPI_COMM_WORLD, &Ntasks);
+#else
+	Ntasks = 1;
+	ThisTask = 0;
+#endif
+
     /*---Read-arguments-----------------------------------*/
     if(argc< (nargs+1)) {
         Printhelp() ;
@@ -34,18 +46,28 @@ int main(int argc, char **argv)
     output_filebase=argv[2];
     noutfiles=atoi(argv[3]);
     
-    fprintf(stderr,"Running `%s' with the parameters \n",argv[0]);
-    fprintf(stderr,"\n\t\t -------------------------------------\n");
-    for(int i=1;i<argc;i++) {
+	if(ThisTask == 0) {
+	  fprintf(stderr,"Running `%s' with the parameters \n",argv[0]);
+	  fprintf(stderr,"\n\t\t -------------------------------------\n");
+	  for(int i=1;i<argc;i++) {
         if(i <= nargs) {
-            fprintf(stderr,"\t\t %-10s = %s \n",argnames[i-1],argv[i]);
+		  fprintf(stderr,"\t\t %-10s = %s \n",argnames[i-1],argv[i]);
         }  else {
-            fprintf(stderr,"\t\t <> = `%s' \n",argv[i]);
+		  fprintf(stderr,"\t\t <> = `%s' \n",argv[i]);
         }
-    }
-    fprintf(stderr,"\t\t -------------------------------------\n");
+	  }
+	  fprintf(stderr,"\t\t Ntasks = %d \n", Ntasks);
+	  fprintf(stderr,"\t\t -------------------------------------\n");
+	}
 
     int status = split_gadget(input_filebase, output_filebase, noutfiles);
+#ifdef USE_MPI
+	if(status != EXIT_SUCCESS) {
+	  MPI_Abort(MPI_COMM_WORLD, status);
+	}
+	MPI_Finalize();
+#endif
+
     return status;
 }
 
