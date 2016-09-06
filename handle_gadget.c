@@ -156,7 +156,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
     }
     outhdr.npart[1] = 0;
 
-    FILE *fp = fopen(outfilename, "r+");
+    FILE *fp = fopen(outfilename, "w");
     if(fp == NULL) {
         fprintf(stderr,"Error: Could not open output file = `%s' (even though supposedly disk space reserving worked!) \n",outfilename);
         perror(NULL);
@@ -429,31 +429,31 @@ int generate_file_skeleton(const char *outfile, const size_t numpart, const size
         }
     }
 
+	return EXIT_SUCCESS;
+    /* /\* Reserve disk space for a Gadget file *\/ */
+    /* int fd = open(outfile, O_CREAT | O_TRUNC | O_WRONLY); */
+    /* if(fd < 0) { */
+    /*     fprintf(stderr,"Error: During reserving space for file = `%s'\n",outfile); */
+    /*     perror(NULL); */
+    /*     return EXIT_FAILURE; */
+    /* } */
 
-    /* Reserve disk space for a Gadget file */
-    int fd = open(outfile, O_CREAT | O_TRUNC | O_WRONLY);
-    if(fd < 0) {
-        fprintf(stderr,"Error: During reserving space for file = `%s'\n",outfile);
-        perror(NULL);
-        return EXIT_FAILURE;
-    }
-
-    off_t totbytes = 2*(numpart * sizeof(float) * 3 + 2*sizeof(int)) +
-        numpart * id_bytes + 2*sizeof(int) + sizeof(struct io_header) + 2*sizeof(int);
-	fprintf(stderr,"Trying to reserve %zu bytes for %zu particles in file `%s'\n",totbytes, numpart, outfile);
-    int status = posix_fallocate(fd, 0, totbytes);
-    if(status!= 0) {
-        fprintf(stderr,"Error: While trying to reserve disk space = %zu bytes for file = `%s' \n"
-                "posix_fallocate returned error status = %d\n", totbytes, outfile, status);
-        perror(NULL);
-        return EXIT_FAILURE;
-    }
-    if(close(fd) != 0){
-        fprintf(stderr,"Error: While trying to close file descriptor after reserving disk space\n");
-        perror(NULL);
-		return EXIT_FAILURE;
-    };
+    /* off_t totbytes = 2*(numpart * sizeof(float) * 3 + 2*sizeof(int)) + */
+    /*     numpart * id_bytes + 2*sizeof(int) + sizeof(struct io_header) + 2*sizeof(int); */
+	/* fprintf(stderr,"Trying to reserve %zu bytes for %zu particles in file `%s'\n",totbytes, numpart, outfile); */
+    /* int status = posix_fallocate(fd, 0, totbytes); */
+    /* if(status!= 0) { */
+    /*     fprintf(stderr,"Error: While trying to reserve disk space = %zu bytes for file = `%s' \n" */
+    /*             "posix_fallocate returned error status = %d\n", totbytes, outfile, status); */
+    /*     perror(NULL); */
+    /*     return EXIT_FAILURE; */
+    /* } */
+    /* if(close(fd) != 0){ */
+    /*     fprintf(stderr,"Error: While trying to close file descriptor after reserving disk space\n"); */
+    /*     perror(NULL); */
+	/* 	return EXIT_FAILURE; */
+    /* }; */
     
-    return EXIT_SUCCESS;
+    /* return EXIT_SUCCESS; */
 }
 
