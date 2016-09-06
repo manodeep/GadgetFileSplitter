@@ -6,6 +6,8 @@
 
 #include "split_gadget.h"
 #include "handle_gadget.h"
+#include "utils.h"
+#include "progressbar.h"
 
 #ifndef MAXLEN
 #define MAXLEN (1024)
@@ -89,6 +91,7 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
     int64_t totnumpart = count_total_number_of_particles(filebase, num_input_files, numpart_in_input_file);
     fprintf(stdout,"Found %"PRId64" dark matter particles spread over %d input files\n",
             totnumpart, num_input_files);
+	fflush(stdout);
 
     {
         /* Check that it is possible to split/merge the snapshot into the requested
@@ -116,22 +119,24 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
     }
 
     /* Note using 'int' here */
-    const int32_t npart_per_file = (int) (totnumpart/noutfiles);
+    const int32_t npart_per_file = totnumpart/noutfiles;
     int32_t spill = totnumpart % noutfiles;
 
     /* Okay now generate the file mapping for each output file */
     int32_t inp = 0;//input file
     int32_t curr_offset = 0;
+	int interrupted=0;
+	init_my_progressbar(noutfiles, &interrupted);
     for(int32_t out=0;out<noutfiles;out++) {
+	  my_progressbar(out, &interrupted);
         fmap[out].numfiles = 0;
-
 
         /* First figure out how many input files are mapped into this output file */
         int32_t numfiles = 1;
         int32_t start_inp = inp;
         int32_t start_offset = curr_offset;
         int32_t npart=0;
-        
+
         /* Have to figure out how many particles to take from which input files */
         while(inp < num_input_files) {
             int32_t particles_left_inp = numpart_in_input_file[inp] - curr_offset;
@@ -150,17 +155,24 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
                 //do not increment numfiles or inp.
                 int32_t num_particles = npart_per_file - npart;
                 curr_offset += num_particles;
+				npart += num_particles;
                 /* Only assign the spill if there are particles left in this file.
                    Worst case, the last output file will have some extra particles */
                 if(spill > 0 && particles_left_inp > num_particles) {
-                    npart++;
-                    spill--;
-                    curr_offset++;
+				  npart++;
+				  spill--;
+				  curr_offset++;
                 }
                 break;
             }
+			fprintf(stderr,"out = %d npart = %d inp = %d start_inp = %d\n",
+					out, npart, inp, start_inp);
+			interrupted = 1;
         }/* Done with mapping the input files to the output files */
-
+		fprintf(stderr,"\nout = %d npart = %d inp = %d start_inp = %d npart_per_file = %d spill = %d\n", 
+				out, npart, inp, start_inp, npart_per_file, spill);
+		interrupted = 1;
+		
         int status = allocate_file_mapping(&fmap[out], numfiles);
         if(status != EXIT_SUCCESS) {
             return status;
@@ -221,18 +233,21 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
             numpart_written_this_file += fmap[out].input_file_end_particle[i] - fmap[out].input_file_start_particle[i];
         }
     }
+	finish_myprogressbar(&interrupted);
 
     /* All the file-mappings have been created -> can be farmed out */
     ssize_t id_bytes = find_id_bytes(filebase);
     if(id_bytes < 0) {
         return EXIT_FAILURE;
     }
-
+	
     for(int i=0;i<noutfiles;i++) {
-        int status = gadget_snapshot_create(filebase, outfilebase, &fmap[i], (size_t) id_bytes);
-        if(status != EXIT_SUCCESS) {
-            return status;
-        }
+	  char filename[MAXLEN];
+	  my_snprintf(filename, MAXLEN, "%s.%d", outfilebase,i);
+	  int status = gadget_snapshot_create(filebase, filename, &fmap[i], (size_t) id_bytes);
+	  if(status != EXIT_SUCCESS) {
+		return status;
+	  }
     }
 
     free(numpart_in_input_file);

@@ -1,9 +1,9 @@
 CC:=gcc
 
 TARGET:=gadget_file_splitter
-SRC:=main.c filesplitter.c utils.c handle_gadget.c split_gadget.c 
+SRC:=main.c filesplitter.c utils.c handle_gadget.c split_gadget.c progressbar.c
 OBJS:=$(SRC:.c=.o)
-INCL:=filesplitter.h utils.h handle_gadget.h gadget_defs.h split_gadget.h
+INCL:=filesplitter.h utils.h handle_gadget.h gadget_defs.h split_gadget.h progressbar.h
 
 OPTIONS:=
 OPTIMIZE:=-O3 -march=native

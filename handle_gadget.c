@@ -11,6 +11,7 @@
 #include "handle_gadget.h"
 #include "split_gadget.h"
 #include "filesplitter.h"
+#include "progressbar.h"
 
 #define MAXLEN (1024)
 
@@ -27,18 +28,18 @@ ssize_t find_id_bytes(const char *filebase)
     struct io_header hdr;
     uint32_t dummy;
     size_t nread = my_fread(&dummy, sizeof(dummy), 1, fp);
-    if(nread != sizeof(dummy) || dummy != 256) {
+    if(nread != 1 || dummy != 256) {
         fprintf(stderr,"Read error: Either failed to read (front) padding bytes for header in file `%s' or the read value (=%d) was not 256\n",
                 filename, dummy);
         return -1;
     }
     nread = my_fread(&hdr, sizeof(hdr), 1, fp);
-    if(nread != sizeof(hdr)) {
+    if(nread != 1) {
         return -1;
     }
     nread = my_fread(&dummy, sizeof(dummy), 1, fp);
     
-    if(nread != sizeof(dummy) || dummy != 256) {
+    if(nread != 1 || dummy != 256) {
         fprintf(stderr,"Read error: Either failed to read (end) padding bytes for header in file `%s' or the read value (=%d) was not 256\n",
                 filename, dummy);
         return -1;
@@ -65,7 +66,7 @@ ssize_t find_id_bytes(const char *filebase)
         return -1;
     }
     nread = my_fread(&dummy, sizeof(dummy), 1, fp);
-    if(nread != sizeof(dummy)) {
+    if(nread != 1) {
         return -1;
     }
     
@@ -177,6 +178,13 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
             close(out_fd);
             return status;
         }
+		fprintf(stderr,"Moving [%d -- %d] particles from input file = `%s' to outputfile = `%s' (nwritten so far = %d)\n",
+				fmap->input_file_start_particle[i],
+				fmap->input_file_end_particle[i],
+				filename,
+				outfilename,
+				fmap->output_file_nwritten[i]);
+		return EXIT_SUCCESS;
 
         int in_fd = open(filename, O_RDONLY);
 
@@ -315,19 +323,19 @@ int read_header(const char *filename, struct io_header *header)
     }
     uint32_t dummy;
     size_t status = my_fread(&dummy, sizeof(dummy), 1, fp);
-    if(status != sizeof(dummy) || dummy != 256) {
+    if(status != 1 || dummy != 256) {
         fprintf(stderr,"Expected to read %zu bytes containing the size of "
                 "the header := 256. Instead read returned %zu bytes containing %u\n",
                 sizeof(dummy), status, dummy);
         return EXIT_FAILURE;
     }
     status = my_fread(header, sizeof(struct io_header), 1, fp);
-    if(status != sizeof(*header)){
+    if(status != 1) {
         return EXIT_FAILURE;
     }
     
     status = my_fread(&dummy, sizeof(dummy), 1, fp);
-    if(status != sizeof(dummy) || dummy != 256) {
+    if(status != 1 || dummy != 256) {
         return EXIT_FAILURE;
     }
     
@@ -357,8 +365,11 @@ int64_t count_total_number_of_particles(const char *filebase, int32_t nfiles, in
                 nfiles);
         return EXIT_FAILURE;
     }
+	int interrupted=0;
     
+	init_my_progressbar(nfiles, &interrupted);
     for(int32_t ifile=0;ifile<nfiles;ifile++) {
+	  my_progressbar(ifile, &interrupted);
         char filename[MAXLEN];
         my_snprintf(filename,MAXLEN,"%s.%d",filebase,ifile);
         struct io_header hdr;
@@ -396,6 +407,7 @@ int64_t count_total_number_of_particles(const char *filebase, int32_t nfiles, in
         totnumpart += hdr.npart[1];
         numpart_in_input_file[ifile] = hdr.npart[1];
     }
+	finish_myprogressbar(&interrupted);
 
     return totnumpart;
 }
@@ -426,6 +438,7 @@ int generate_file_skeleton(const char *outfile, const size_t numpart, const size
 
     off_t totbytes = 2*(numpart * sizeof(float) * 3 + 2*sizeof(int)) +
         numpart * id_bytes + 2*sizeof(int) + sizeof(struct io_header) + 2*sizeof(int);
+	fprintf(stderr,"Trying to reserve %zu bytes for %zu particles in file `%s'\n",totbytes, numpart, outfile);
     int status = posix_fallocate(fd, 0, totbytes);
     if(status!= 0) {
         fprintf(stderr,"Error: While trying to reserve disk space = %zu bytes for file = `%s' \n"
@@ -436,6 +449,7 @@ int generate_file_skeleton(const char *outfile, const size_t numpart, const size
     if(close(fd) != 0){
         fprintf(stderr,"Error: While trying to close file descriptor after reserving disk space\n");
         perror(NULL);
+		return EXIT_FAILURE;
     };
     
     return EXIT_SUCCESS;
