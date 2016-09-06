@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "split_gadget.h"
+
 void Printhelp(void);
 
 int main(int argc, char **argv)
@@ -43,8 +45,8 @@ int main(int argc, char **argv)
     }
     fprintf(stderr,"\t\t -------------------------------------\n");
 
-
-    return EXIT_SUCCESS;
+    int status = split_gadget(input_filebase, output_filebase, noutfiles);
+    return status;
 }
 
 /*---Print-help-information---------------------------*/

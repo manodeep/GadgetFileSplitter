@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#define _FILE_OFFSET_BITS 64
 
 struct io_header
 {
@@ -25,3 +26,22 @@ struct io_header
     int32_t  flag_entropy_instead_u;         /*!< flags that IC-file contains entropy instead of u */
     char fill[60];                   /*!< fills to 256 Bytes */
 };
+
+struct file_mapping{
+    int32_t *input_file_id;/* the input file id -> corresponds to the rank of the CPU that wrote out this snapshot/IC file */
+    int32_t *input_file_start_particle;/* which particle to start outputting from (inclusive)*/
+    int32_t *input_file_end_particle;/* which particle to end outputting at (excluse). Loops should be of the form */
+    /* Loops to output the particles should be of this form  for(i=input_file_start_particle[k];i<input_file_end_particle[k];i++)*/ 
+    int32_t *output_file_nwritten;/*For multiple input files, contains the cumulative sum of the particles written so far (must be <= numpart) */
+    int64_t numpart;/* number of particles in this output file*/
+    int64_t numfiles;//I could declare this as int but there would be 4 bytes of padding 
+};
+
+typedef enum {
+    POS = 0,
+    VEL = 1,
+    ID = 2,
+    NUM_FIELDS
+}field_type;
+    
+    

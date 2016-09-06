@@ -230,7 +230,7 @@ size_t my_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream)
         fprintf(stderr,"I/O error (fwrite) has occured.\n");
         fprintf(stderr,"Instead of reading nmemb=%zu, I got nread = %zu \n",nmemb,nwritten);
         perror(NULL);
-        return -1;
+        return 0;
     }
     return nwritten;
 }

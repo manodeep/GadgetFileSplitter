@@ -32,3 +32,4 @@ gadget_file_splitter
 # Debug files
 *.dSYM/
 *.su
+xx*

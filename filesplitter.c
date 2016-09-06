@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#define _XOPEN_SOURCE 500
 #include <unistd.h>
-
 
 #include "filesplitter.h"
 
@@ -13,7 +11,7 @@ int filesplitter(int in_fd, int out_fd, off_t in_offset, off_t out_offset, const
 
 int write_bytes(int out_fd, void *buf, const size_t bytes, off_t out_offset)
 {
-    ssize_t bytes_written = 0;
+    size_t bytes_written = 0;
     size_t bytes_left = bytes;
     while(bytes_left > 0) {
         ssize_t this_bytes = pwrite(out_fd, buf, bytes_left, out_offset);
@@ -23,7 +21,7 @@ int write_bytes(int out_fd, void *buf, const size_t bytes, off_t out_offset)
             perror(NULL);
             return EXIT_FAILURE;
         }
-        bytes_written += this_bytes;
+        bytes_written += (size_t) this_bytes;
         out_offset += this_bytes;
         bytes_left -= (size_t) this_bytes;
     }
@@ -38,15 +36,16 @@ int copy_bytes_with_preadwrite(int in_fd, int out_fd, off_t in_offset, off_t out
     }
 
     size_t bytes_left = bytes;
-    ssize_t total_bytes_written = 0;
-    ssize_t total_bytes_read = 0;
+    size_t total_bytes_written = 0;
+    size_t total_bytes_read = 0;
     while(bytes_left > 0) {
         const size_t bytes_to_read = bufsize > bytes ? bytes: bufsize;
         ssize_t bytes_read = pread(in_fd, userbuf, bytes_to_read, in_offset);
         if(bytes_read < 0) {
-            fprintf(stderr,"Error: During read of %zu bytes, encountered while reading bytes [%zu -- %zu]\n",
+            fprintf(stderr,"Error: During read of %zu bytes, encountered while reading bytes [%zu -- %zu].\n",
                     bytes, total_bytes_read, total_bytes_read + bytes_to_read);
             perror(NULL);
+            return EXIT_FAILURE;
         }
         in_offset += (size_t) bytes_read;
         total_bytes_read += (size_t) bytes_read;
