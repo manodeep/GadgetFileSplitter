@@ -24,6 +24,7 @@
 #define ANSI_COLOR_BLUE    "\x1b[34m"
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_BOLD_FONT     "\x1b[1m"
 
 #ifdef NDEBUG
 #define XASSERT(EXP, ...)                                do{} while(0)

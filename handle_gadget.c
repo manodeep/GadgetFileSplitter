@@ -126,11 +126,13 @@ int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t 
         }
         const size_t bytes_per_field = field == ID ? id_bytes:3*sizeof(float);
         const size_t bytes = npart * bytes_per_field;
-        int status = filesplitter(in_fd, out_fd, input_offset, output_offset, bytes, buf, bufsize);
+		fprintf(stderr,"Copying %zu bytes for field = %d (POS=%d VEL=%d ID=%d)...\n",bytes, field, POS, VEL, ID);
+        int status = filesplitter(in_fd, out_fd, input_offset, output_offset, bytes, buf, bufsize, PRDWR);
         if(status != EXIT_SUCCESS) {
             free(buf);
             return status;
         }
+		fprintf(stderr,"Copying %zu bytes for field = %d (POS=%d VEL=%d ID=%d).......done\n",bytes, field, POS, VEL, ID);
     }
     free(buf);
     return EXIT_SUCCESS;
@@ -178,17 +180,17 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
             close(out_fd);
             return status;
         }
-		fprintf(stderr,"Moving [%d -- %d] particles from input file = `%s' to outputfile = `%s' (nwritten so far = %d)\n",
+		fprintf(stderr,"Moving [%d -- %d) particles from input file = `%s' to outputfile = `%s' (nwritten so far = %d)\n",
 				fmap->input_file_start_particle[i],
 				fmap->input_file_end_particle[i],
 				filename,
 				outfilename,
 				fmap->output_file_nwritten[i]);
-		return EXIT_SUCCESS;
 
         int in_fd = open(filename, O_RDONLY);
 
         /* Number of particles written to this output file so far (assuming serial access) */
+		fprintf(stderr,"Calling copy_all_dmfields_from_gadget_snapshot....\n");
         status = copy_all_dmfields_from_gadget_snapshot(in_fd, out_fd,
                                                         fmap->input_file_start_particle[i],
                                                         fmap->input_file_end_particle[i],
@@ -198,8 +200,8 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
             close(in_fd);close(out_fd);
             return status;
         }
-        
-        
+		fprintf(stderr,"Calling copy_all_dmfields_from_gadget_snapshot....done\n\n");
+		
         status = close(in_fd);
         if(status < 0) {
             fprintf(stderr,"Error while closing output file = `%s' opened in read-only mode. This is strange\n"

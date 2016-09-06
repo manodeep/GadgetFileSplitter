@@ -125,10 +125,10 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
     /* Okay now generate the file mapping for each output file */
     int32_t inp = 0;//input file
     int32_t curr_offset = 0;
-	int interrupted=0;
-	init_my_progressbar(noutfiles, &interrupted);
+	/* int interrupted=0; */
+	/* init_my_progressbar(noutfiles, &interrupted); */
     for(int32_t out=0;out<noutfiles;out++) {
-	  my_progressbar(out, &interrupted);
+	  /* my_progressbar(out, &interrupted); */
         fmap[out].numfiles = 0;
 
         /* First figure out how many input files are mapped into this output file */
@@ -159,19 +159,26 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
                 /* Only assign the spill if there are particles left in this file.
                    Worst case, the last output file will have some extra particles */
                 if(spill > 0 && particles_left_inp > num_particles) {
+				  num_particles++;
 				  npart++;
 				  spill--;
 				  curr_offset++;
                 }
+
+				/* If all the particles got assigned, then the offset should point to the 
+				 beginning (for the next file) */
+				if(particles_left_inp == num_particles) {
+				  curr_offset = 0;
+				}
                 break;
             }
-			fprintf(stderr,"out = %d npart = %d inp = %d start_inp = %d\n",
-					out, npart, inp, start_inp);
-			interrupted = 1;
+			/* fprintf(stderr,"out = %d npart = %d inp = %d start_inp = %d\n", */
+			/* 		out, npart, inp, start_inp); */
+			/* interrupted = 1; */
         }/* Done with mapping the input files to the output files */
-		fprintf(stderr,"\nout = %d npart = %d inp = %d start_inp = %d npart_per_file = %d spill = %d\n", 
-				out, npart, inp, start_inp, npart_per_file, spill);
-		interrupted = 1;
+		/* fprintf(stderr,"\nout = %d npart = %d inp = %d start_inp = %d npart_per_file = %d spill = %d\n",  */
+		/* 		out, npart, inp, start_inp, npart_per_file, spill); */
+		/* interrupted = 1; */
 		
         int status = allocate_file_mapping(&fmap[out], numfiles);
         if(status != EXIT_SUCCESS) {
@@ -180,24 +187,26 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
         fmap[out].numpart = npart;
         
         int32_t numpart_written_this_file = 0;
+		fprintf(stderr,ANSI_COLOR_GREEN "%5d \t ", out);
         for(int i=0;i<numfiles;i++) {
             const int this_inp = start_inp + i;
             fmap[out].input_file_id[i] = this_inp;
             if(inp == start_inp) {
                 if(numfiles != 1) {
-                    fprintf(stderr,"Error: There is only one input file (start=%d, end=%d) but the number of files requested (=%d) is not 1\n",
+                    fprintf(stderr, ANSI_COLOR_RED "\nError: There is only one input file (start=%d, end=%d) but the number of files requested (=%d) is not 1"ANSI_COLOR_RESET"\n",
                             start_inp, inp, numfiles);
                     return EXIT_FAILURE;
                 }
                 if(start_offset < 0 || start_offset >= numpart_in_input_file[this_inp] ||
-                   curr_offset  <= 0 || curr_offset  > numpart_in_input_file[this_inp] )
+                   curr_offset  < 0 || curr_offset  > numpart_in_input_file[this_inp] )
                 {
-                    fprintf(stderr,"Error: Start (=%d) or end offset (=%d) is incorrect. The offsets must be in range [0, %d] (not inclusive last edge for start)\n",
+                    fprintf(stderr, ANSI_COLOR_RED "\nError: Start (=%d) or end offset (=%d) is incorrect. The offsets must be in range [0, %d] (not "
+							"inclusive last edge for start)"ANSI_COLOR_RESET"\n",
                             start_offset, curr_offset, numpart_in_input_file[this_inp]);
                     return EXIT_FAILURE;
                 }
                 fmap[out].input_file_start_particle[i] = start_offset;
-                fmap[out].input_file_end_particle[i] = curr_offset;
+                fmap[out].input_file_end_particle[i] = curr_offset == 0 ? numpart_in_input_file[this_inp]: curr_offset;
             } else {
                 /* There are multple input files for this output file */
                 /* Assign entire input file to this output file (wrong, will get fixed immediately) */
@@ -207,41 +216,63 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
                 /* Okay now fix the start for the first file */
                 if(i == 0) {
                     if(start_offset < 0 || start_offset >= numpart_in_input_file[this_inp]) {
-                        fprintf(stderr,"Error: Start offset (=%d) must be in range [0, %d)\n",
+                        fprintf(stderr,ANSI_COLOR_RED "\nError: Start offset (=%d) must be in range [0, %d)"ANSI_COLOR_RESET"\n",
                                 start_offset, numpart_in_input_file[this_inp]);
                         return EXIT_FAILURE;
                     }
                     fmap[out].input_file_start_particle[i] = start_offset;
                 }
+                /* Now fix the end for the last file */
 
-                /* Now the end for the last file */
+				/* /\*It is possible that all the particles got assigned in the last file required for satisfying the particle criteria. */
+				/*  IN that case curr_offset will be 0 (since the next output file will start at 0) *\/ */
+				/* if(curr_offset == 0) { */
+				/*   if(i != (numfiles-1)){ */
+				/* 	fprintf(stderr,ANSI_COLOR_RED"\nError: End offset (== 0) can only be 0 for the last file. Here end offset is " */
+				/* 			"zero for the %d'th (out of %d) input file with input file rank = %d (for %d'th outputfile)"ANSI_COLOR_RESET"\n", */
+				/* 			i, numfiles, this_inp, out); */
+				/* 	return EXIT_FAILURE; */
+					
+				/*   } */
+				/* } */
+
                 if(i == (numfiles-1) ) {
-                    if(curr_offset <= 0 || curr_offset > numpart_in_input_file[this_inp]) {
-                        fprintf(stderr,"Error: End offset (=%d) must be in range (0, %d]\n",
+                    if(curr_offset < 0 || curr_offset > numpart_in_input_file[this_inp]) {
+                        fprintf(stderr,ANSI_COLOR_RED"\nError: End offset (=%d) must be in range (0, %d]"ANSI_COLOR_RESET"\n",
                                 curr_offset, numpart_in_input_file[this_inp]);
                         return EXIT_FAILURE;
                     }
-                    fmap[out].input_file_end_particle[i] = curr_offset;
+                    fmap[out].input_file_end_particle[i] = curr_offset == 0 ?  numpart_in_input_file[this_inp]:curr_offset;
                 }
             }
 
-            if(numfiles == 1) {
-                fmap[out].output_file_nwritten[i] = 0;
-            } else {
-                fmap[out].output_file_nwritten[i] = numpart_written_this_file;
-            }
+			fmap[out].output_file_nwritten[i] = numpart_written_this_file;
             numpart_written_this_file += fmap[out].input_file_end_particle[i] - fmap[out].input_file_start_particle[i];
+			if(fmap[out].input_file_end_particle[i] == numpart_in_input_file[this_inp] &&
+			   fmap[out].input_file_start_particle[i] == 0) {
+			  /*Writing out all particles in this input file */
+			  fprintf(stderr," %5d"ANSI_COLOR_RESET", "ANSI_COLOR_BLUE ANSI_BOLD_FONT"<---all---> \t "ANSI_COLOR_GREEN, this_inp);
+			} else {
+			  fprintf(stderr," %5d"ANSI_COLOR_RESET", "ANSI_COLOR_BLUE"[%08d, %08d)/"ANSI_COLOR_MAGENTA"%09d \t "ANSI_COLOR_GREEN, this_inp, fmap[out].input_file_start_particle[i],
+					  fmap[out].input_file_end_particle[i], numpart_in_input_file[this_inp]);
+			}
         }
+		fprintf(stderr,ANSI_COLOR_RESET"\n");
     }
-	finish_myprogressbar(&interrupted);
+	/* finish_myprogressbar(&interrupted); */
 
     /* All the file-mappings have been created -> can be farmed out */
     ssize_t id_bytes = find_id_bytes(filebase);
     if(id_bytes < 0) {
         return EXIT_FAILURE;
     }
-	
+
+
+	/* Particle mappings have been generated -> now do the actual data-transfer */
+	int interrupted=0;
+	init_my_progressbar(noutfiles, &interrupted);
     for(int i=0;i<noutfiles;i++) {
+	  my_progressbar(i, &interrupted);
 	  char filename[MAXLEN];
 	  my_snprintf(filename, MAXLEN, "%s.%d", outfilebase,i);
 	  int status = gadget_snapshot_create(filebase, filename, &fmap[i], (size_t) id_bytes);
@@ -249,6 +280,7 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
 		return status;
 	  }
     }
+	finish_myprogressbar(&interrupted);
 
     free(numpart_in_input_file);
     for(int i=0;i<noutfiles;i++){
