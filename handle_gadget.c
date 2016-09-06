@@ -261,7 +261,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 int write_front_and_end_padding_bytes_to_stream(uint32_t dummy, FILE *fp)
 {
     size_t nwritten = my_fwrite(&dummy, sizeof(dummy), 1, fp);
-    if(nwritten != sizeof(dummy)) {
+    if(nwritten != 1) {
         fprintf(stderr,"Error: While writing (front) padding bytes for field with %u bytes. Managed to only write %zu bytes instead of 4\n",
                 dummy, nwritten);
         return EXIT_FAILURE;
@@ -273,7 +273,7 @@ int write_front_and_end_padding_bytes_to_stream(uint32_t dummy, FILE *fp)
         return EXIT_FAILURE;
     }
     nwritten = my_fwrite(&dummy, sizeof(dummy), 1, fp);
-    if(nwritten != sizeof(dummy)) {
+    if(nwritten != 1) {
         fprintf(stderr,"Error: While writing (end) padding bytes for field with %u bytes. Managed to only write %zu bytes instead of 4\n",
                 dummy, nwritten);
         return EXIT_FAILURE;
@@ -291,21 +291,21 @@ int write_hdr_to_stream(FILE *fp, struct io_header *header)
 
     uint32_t dummy = 256;
     size_t nwritten = my_fwrite(&dummy, sizeof(dummy), 1, fp);
-    if(nwritten != sizeof(dummy)) {
+    if(nwritten != 1) {
         fprintf(stderr,"Error: Could not write (front) padding bytes for the header\n");
         perror(NULL);
         return EXIT_FAILURE;
     }
 
     nwritten = my_fwrite(header, sizeof(*header), 1, fp);
-    if(nwritten != sizeof(*header)) {
+    if(nwritten != 1) {
         fprintf(stderr,"Error: Could not write Gadget header\n");
         perror(NULL);
         return EXIT_FAILURE;
     }
     
     nwritten = my_fwrite(&dummy, sizeof(dummy), 1, fp);
-    if(nwritten != sizeof(dummy)) {
+    if(nwritten != 1) {
         fprintf(stderr,"Error: Could not write (end) padding bytes for the header\n");
         perror(NULL);
         return EXIT_FAILURE;
