@@ -44,7 +44,7 @@ int copy_bytes_with_preadwrite(int in_fd, int out_fd, off_t in_offset, off_t out
     size_t total_bytes_written = 0;
     size_t total_bytes_read = 0;
     while(bytes_left > 0) {
-        const size_t bytes_to_read = bufsize > bytes ? bytes: bufsize;
+        const size_t bytes_to_read = bufsize > bytes_left ? bytes_left: bufsize;
         ssize_t bytes_read = pread(in_fd, userbuf, bytes_to_read, in_offset);
         if(bytes_read < 0) {
             fprintf(stderr,"Error: During read of %zu bytes, encountered while reading bytes [%zu -- %zu].\n",
