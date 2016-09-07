@@ -253,10 +253,24 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         }
         
     }
-    
-
-
+    rewind(fp);
+    long filesize = fseek(fp, 0, SEEK_END);
     fclose(fp);
+
+    long expected_file_size = 2*sizeof(int) + sizeof(struct io_header) +
+        2*sizeof(int) + outhdr.npart[1]*3*sizeof(float)+
+        2*sizeof(int) + outhdr.npart[1]*3*sizeof(float)+
+        2*sizeof(int) + outhdr.npart[1]*id_bytes;
+
+    if(filesize != expected_file_size) {
+        fprintf(stderr,"Error: Expected file size is %ld but after finishing writing the entire file contains %ld bytes\n",
+                filesize, expected_file_size);
+        fprintf(stderr,"Output file = `%s' number of DM particles = %d (on ThisTask = %d)\n",
+                outfilename, outhdr.npart[1], ThisTask);
+        return EXIT_FAILURE;
+    }
+        
+    
     return EXIT_SUCCESS;
 }
 
