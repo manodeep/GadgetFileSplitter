@@ -139,7 +139,7 @@ int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t 
     return EXIT_SUCCESS;
 }    
 
-int gadget_snapshot_create(const char *filebase, const char *outfilename, struct file_mapping *fmap, const size_t id_bytes)
+int gadget_snapshot_create(const char *filebase, const char *outfilename, struct file_mapping *fmap, const size_t id_bytes, const int noutfiles)
 {
   int status = check_if_file_exists(outfilename);
     if(status != EXIT_SUCCESS) {
@@ -156,6 +156,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         }
     }
     outhdr.npart[1] = 0;
+	outhdr.num_files = noutfiles;
 
     FILE *fp = fopen(outfilename, "w");
     if(fp == NULL) {

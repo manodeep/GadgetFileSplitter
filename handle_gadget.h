@@ -9,7 +9,7 @@ extern "C" {
   int64_t count_total_number_of_particles(const char *filebase, int32_t nfiles, int32_t *numpart_in_input_file);
   int read_header(const char *filename, struct io_header *header);
   int32_t find_numfiles(const char *filebase);
-  int gadget_snapshot_create(const char *filebase, const char *outfilename, struct file_mapping *fmap, const size_t id_bytes);
+  int gadget_snapshot_create(const char *filebase, const char *outfilename, struct file_mapping *fmap, const size_t id_bytes, const int noutfiles);
   int check_if_file_exists(const char *outfile);
   int write_hdr_to_stream(FILE *fp, struct io_header *header);
   ssize_t find_id_bytes(const char *filebase);

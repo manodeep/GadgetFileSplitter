@@ -290,7 +290,7 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
 	
 	  char filename[MAXLEN];
 	  my_snprintf(filename, MAXLEN, "%s.%d", outfilebase,i);
-	  int status = gadget_snapshot_create(filebase, filename, &fmap[i], (size_t) id_bytes);
+	  int status = gadget_snapshot_create(filebase, filename, &fmap[i], (size_t) id_bytes, noutfiles);
 	  if(status != EXIT_SUCCESS) {
 		return status;
 	  }
