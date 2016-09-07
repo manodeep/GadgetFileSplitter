@@ -108,7 +108,8 @@ off_t get_offset_from_npart(const int32_t npart, field_type field)
     return offset;
 }
 
-int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t start, const int32_t end, const int32_t nwritten, const size_t id_bytes)
+int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t start, const int32_t end, 
+										   const int32_t nwritten, const size_t id_bytes, const file_copy_options copy_kind)
 {
     const int32_t npart = end - start;//end is not inclusive -> that's why npart = end - start rather than npart = end - start + 1
     const long sz = sysconf(_SC_PAGESIZE);
@@ -128,7 +129,7 @@ int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t 
         const size_t bytes_per_field = field == ID ? id_bytes:3*sizeof(float);
         const size_t bytes = npart * bytes_per_field;
 		fprintf(stderr,"Copying %zu bytes for field = %d (POS=%d VEL=%d ID=%d)...\n",bytes, field, POS, VEL, ID);
-        int status = filesplitter(in_fd, out_fd, input_offset, output_offset, bytes, buf, bufsize, PRDWR);
+        int status = filesplitter(in_fd, out_fd, input_offset, output_offset, bytes, buf, bufsize, copy_kind);
         if(status != EXIT_SUCCESS) {
             free(buf);
             return status;
@@ -139,12 +140,35 @@ int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t 
     return EXIT_SUCCESS;
 }    
 
-int gadget_snapshot_create(const char *filebase, const char *outfilename, struct file_mapping *fmap, const size_t id_bytes, const int noutfiles)
+int gadget_snapshot_create(const char *filebase, const char *outfilename, struct file_mapping *fmap, const size_t id_bytes, 
+						   const int noutfiles, const file_copy_options copy_kind)
 {
   int status = check_if_file_exists(outfilename);
-    if(status != EXIT_SUCCESS) {
-        return status;
-    }
+  if(status != EXIT_SUCCESS) {
+	return status;
+  }
+
+  long expected_file_size = 2*sizeof(int) + sizeof(struct io_header) +
+	2*sizeof(int) + fmap->numpart*3*sizeof(float)+
+	2*sizeof(int) + fmap->numpart*3*sizeof(float)+
+	2*sizeof(int) + fmap->numpart*id_bytes;
+  
+  {
+	char execstring[MAXLEN];
+	int nwritten = my_snprintf(execstring, MAXLEN, "truncate -s %ld %s\n", expected_file_size, outfilename);
+	if(nwritten >= MAXLEN) {
+	  fprintf(stderr,"Could not create string for system command. Please increase MAXLEN in %s\n",__FILE__);
+	  perror(NULL);
+	  return EXIT_FAILURE;
+	}
+	status = system(execstring);
+	if(status != EXIT_SUCCESS) {
+	  fprintf(stderr,"Error: Could not reserve disk space = %ld bytes for file = `%s'\n", expected_file_size, outfilename);
+	  perror(NULL);
+	  return EXIT_FAILURE;
+	}
+  }
+
     struct io_header outhdr;
     /* New scope to hide the "filename" variable */
     {
@@ -155,10 +179,10 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
             return status;
         }
     }
-    outhdr.npart[1] = 0;
+    outhdr.npart[1] = fmap->numpart;
 	outhdr.num_files = noutfiles;
 
-    FILE *fp = fopen(outfilename, "w");
+    FILE *fp = fopen(outfilename, "r+");
     if(fp == NULL) {
         fprintf(stderr,"Error: Could not open output file = `%s' (even though supposedly disk space reserving worked!) \n",outfilename);
         perror(NULL);
@@ -171,6 +195,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         return status;
     }
     fclose(fp);//closed output file
+	outhdr.npart[1] = 0;
 
     int out_fd = open(outfilename, O_WRONLY);
 	fprintf(stderr,"\n");
@@ -205,7 +230,8 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
                                                         fmap->input_file_start_particle[i],
                                                         fmap->input_file_end_particle[i],
                                                         fmap->output_file_nwritten[i],
-                                                        id_bytes);
+                                                        id_bytes,
+														copy_kind);
         if(status != EXIT_SUCCESS) {
             close(in_fd);close(out_fd);
             return status;
@@ -270,11 +296,6 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 	my_fseek(fp, 0, SEEK_END);
     long filesize = ftell(fp);
     fclose(fp);
-
-    long expected_file_size = 2*sizeof(int) + sizeof(struct io_header) +
-        2*sizeof(int) + outhdr.npart[1]*3*sizeof(float)+
-        2*sizeof(int) + outhdr.npart[1]*3*sizeof(float)+
-        2*sizeof(int) + outhdr.npart[1]*id_bytes;
 
     if(filesize != expected_file_size) {
 	  fprintf(stderr,"Error: Expected file size is %ld but after finishing writing the entire file contains %ld bytes\n",

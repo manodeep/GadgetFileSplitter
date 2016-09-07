@@ -15,6 +15,9 @@
 
 #include "mpi_wrapper.h"
 
+int allocate_file_mapping(struct file_mapping *, const int64_t);
+void free_file_mapping(struct file_mapping *);
+
 int allocate_file_mapping(struct file_mapping *fmap, const int64_t numfiles)
 {
     if(fmap == NULL) {
@@ -70,7 +73,7 @@ void free_file_mapping(struct file_mapping *fmap)
 }
 
 
-int split_gadget(const char *filebase, const char *outfilebase, const int noutfiles)
+int split_gadget(const char *filebase, const char *outfilebase, const int noutfiles, const file_copy_options copy_kind)
 {
     struct file_mapping *fmap = NULL;
     
@@ -298,11 +301,10 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
 	if(ThisTask == 0) {
 	  init_my_progressbar(noutfiles, &interrupted);
 	}
-    for(int i=0 + ThisTask;i<noutfiles;i+=Ntasks) {
-	
+    for(int i=ThisTask;i<noutfiles;i+=Ntasks) {
 	  char filename[MAXLEN];
 	  my_snprintf(filename, MAXLEN, "%s.%d", outfilebase,i);
-	  int status = gadget_snapshot_create(filebase, filename, &fmap[i], (size_t) id_bytes, noutfiles);
+	  int status = gadget_snapshot_create(filebase, filename, &fmap[i], (size_t) id_bytes, noutfiles, copy_kind);
 	  if(status != EXIT_SUCCESS) {
 		return status;
 	  }

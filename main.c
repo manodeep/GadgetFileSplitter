@@ -2,10 +2,9 @@
 #include <stdlib.h>
 
 #include "split_gadget.h"
+#include "mpi_wrapper.h"
 
 void Printhelp(void);
-
-#include "mpi_wrapper.h"
 
 int main(int argc, char **argv)
 {
@@ -60,7 +59,7 @@ int main(int argc, char **argv)
 	  fprintf(stderr,"\t\t -------------------------------------\n");
 	}
 
-    int status = split_gadget(input_filebase, output_filebase, noutfiles);
+    int status = split_gadget(input_filebase, output_filebase, noutfiles, PRDWR);
 #ifdef USE_MPI
 	if(status != EXIT_SUCCESS) {
 	  MPI_Abort(MPI_COMM_WORLD, status);
