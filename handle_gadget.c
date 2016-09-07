@@ -62,7 +62,7 @@ ssize_t find_id_bytes(const char *filebase)
 
     int status = fseeko(fp,offset,SEEK_CUR);
     if(status < 0) {
-        fprintf(stderr,"Error: Could not seek %ld bytes into file `%s' while trying to figure out the number of bytes in each particle ID\n",
+        fprintf(stderr,"Error: Could not seek %lld bytes into file `%s' while trying to figure out the number of bytes in each particle ID\n",
                 offset, filename);
         return -1;
     }
