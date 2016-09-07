@@ -390,58 +390,92 @@ int32_t find_numfiles(const char *filebase)
 
 int64_t count_total_number_of_particles(const char *filebase, int32_t nfiles, int32_t *numpart_in_input_file)
 {
-    int64_t totnumpart = 0;
+  int64_t numpart = 0, totnumpart = 0;
     
     if(nfiles <= 0) {
         fprintf(stderr,"Error: Number of files that the snapshot file is spread over must be specified. Got nfiles = %d\n",
                 nfiles);
         return EXIT_FAILURE;
     }
-	int interrupted=0;
+	int interrupted=0, numdone=0,totnumdone=0;
     if(ThisTask == 0) {
 	  init_my_progressbar(nfiles, &interrupted);
 	}
     for(int32_t ifile=0;ifile<nfiles;ifile++) {
 	  if(ThisTask == 0) {
-		my_progressbar(ifile, &interrupted);
+		my_progressbar(totnumdone, &interrupted);
 	  }
-        char filename[MAXLEN];
-        my_snprintf(filename,MAXLEN,"%s.%d",filebase,ifile);
-        struct io_header hdr;
-        int status = read_header(filename, &hdr);
-        if(status != EXIT_SUCCESS) {
-            return -1;
-        }
-        if(hdr.num_files != nfiles) {
-            fprintf(stderr,"Error: Header in file `%s' claims file is spread over %d files "
-                    " However, the code was requested to only read in %d files. Probably an error\n",
-                    filename, hdr.num_files, nfiles);
-            return -1;
-        }
 
-        /* Check that this is a dark matter only */
-        for(int type=0;type<6;type++) {
-            if(type == 1) continue;
-            
+	  /* fprintf(stderr,"\nThisTask = %5d working on ifile = %5d\n", ThisTask, ifile); */
+	  char filename[MAXLEN];
+	  my_snprintf(filename,MAXLEN,"%s.%d",filebase,ifile);
+	  struct io_header hdr;
+	  int status = read_header(filename, &hdr);
+	  if(status != EXIT_SUCCESS) {
+		return -1;
+	  }
+	  if(hdr.num_files != nfiles) {
+		  fprintf(stderr,"Error: Header in file `%s' claims file is spread over %d files "
+				  " However, the code was requested to only read in %d files. Probably an error\n",
+				  filename, hdr.num_files, nfiles);
+		  return -1;
+	  }
+	  
+	  /* Check that this is a dark matter only */
+	  for(int type=0;type<6;type++) {
+		if(type == 1) continue;
+		
+		if(hdr.npart[type] > 0) {
+		  fprintf(stderr,"Error: This code is only meant to convert dark matter only sims.\n"
+				  "Thus, only npart[1] should have non-zero entry but I find npart[%d] = %d in file = `%s'\n",
+				  type, hdr.npart[type], filename);
+		  return EXIT_FAILURE;
+		}
+	  }
+	  
+	  /* So we have a dark-matter only simulation. Check that dark matter
+		 mass array is not 0.0 (i,e. particles don't have individual masses)*/
+	  if(hdr.mass[1] <= 0.0) {
+		fprintf(stderr,"Error: This code can not handle dark matter particles with individual masses. However, in file `%s' "
+				"dark matter mass is = %lf \n", filename, hdr.mass[1]);
+		return EXIT_FAILURE;
+	  }
+	  numpart += hdr.npart[1];
+	  numpart_in_input_file[ifile] = hdr.npart[1];
+	  numdone++;
+	  totnumdone++;
 
-            if(hdr.npart[type] > 0) {
-                fprintf(stderr,"Error: This code is only meant to convert dark matter only sims.\n"
-                        "Thus, only npart[1] should have non-zero entry but I find npart[%d] = %d in file = `%s'\n",
-                        type, hdr.npart[type], filename);
-                return EXIT_FAILURE;
-            }
-        }
+#if 0
+#ifdef USE_MPI
+	  MPI_Allreduce(&numdone, &totnumdone, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+#else
+	  totnumdone = numdone;
+#endif
+	  fprintf(stderr,"ThisTask = %5d working on ifile = %5d...done. numdone = %5d\n", ThisTask, ifile, numdone);
+	  interrupted=1;
+#endif//if 0
+    }//for loop over nfiles
 
-        /* So we have a dark-matter only simulation. Check that dark matter
-           mass array is not 0.0 (i,e. particles don't have individual masses)*/
-        if(hdr.mass[1] <= 0.0) {
-            fprintf(stderr,"Error: This code can not handle dark matter particles with individual masses. However, in file `%s' "
-                    "dark matter mass is = %lf \n", filename, hdr.mass[1]);
-            return EXIT_FAILURE;
-        }
-        totnumpart += hdr.npart[1];
-        numpart_in_input_file[ifile] = hdr.npart[1];
-    }
+
+#if 0
+#ifdef USE_MPI
+	fprintf(stderr,"ThisTask = %5d (numdone = %5d) - reached MPI Barrier\n",ThisTask, numdone);
+	MPI_Barrier(MPI_COMM_WORLD);
+	for(int ifile=0;ifile<nfiles;ifile++) {
+	  fprintf(stderr,"Broadcasting ifile = %d...",ifile);
+	  int ierr = MPI_Bcast(&numpart_in_input_file[ifile], 1, MPI_INT, ifile, MPI_COMM_WORLD);
+	  if (ierr != MPI_SUCCESS) {
+		return ierr;
+	  }
+	  fprintf(stderr,"Broadcasting ifile = %d......done\n",ifile);
+	}
+	MPI_Allreduce(&numpart, &totnumpart, 1, MPI_INT64_T, MPI_SUM, MPI_COMM_WORLD);
+#else
+	totnumpart = numpart;
+#endif
+#endif//if 0
+
+	totnumpart = numpart;
 	if(ThisTask == 0) {
 	  finish_myprogressbar(&interrupted);
 	}
