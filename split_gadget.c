@@ -132,6 +132,7 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
     /* Okay now generate the file mapping for each output file */
     int32_t inp = 0;//input file
     int32_t curr_offset = 0;
+	int64_t totnumpart_assigned = 0;
 	/* int interrupted=0; */
 	/* init_my_progressbar(noutfiles, &interrupted); */
     for(int32_t out=0;out<noutfiles;out++) {
@@ -192,6 +193,7 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
             return status;
         }
         fmap[out].numpart = npart;
+		totnumpart_assigned += npart;
         
         int32_t numpart_written_this_file = 0;
 		if(ThisTask == 0) {
@@ -273,6 +275,16 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
 		}
     }
 	/* finish_myprogressbar(&interrupted); */
+	if(totnumpart != totnumpart_assigned) {
+	  fprintf(stderr,"Error: All files contain %"PRId64" particles but I have only assigned %"PRId64" particles. Bug in code\n",
+			  totnumpart, totnumpart_assigned);
+#ifdef USE_MPI
+	  MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+#endif
+	  return EXIT_FAILURE;
+	}
+
+
 
     /* All the file-mappings have been created -> can be farmed out */
     ssize_t id_bytes = find_id_bytes(filebase);

@@ -174,6 +174,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 
     int out_fd = open(outfilename, O_WRONLY);
 	fprintf(stderr,"\n");
+	int32_t nwritten = 0;
     for(int64_t i=0;i<fmap->numfiles;i++) {
         char filename[MAXLEN];
         my_snprintf(filename, MAXLEN, "%s.%d", filebase, fmap->input_file_id[i]);
@@ -183,6 +184,13 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
             close(out_fd);
             return status;
         }
+		if(nwritten != fmap->output_file_nwritten[i]) {
+		  fprintf(stderr,"Error: Mismatch between the number of particles written (=%d) out so far and what is claimed by the particle mapping =(%d)\n",
+				  nwritten, fmap->output_file_nwritten[i]);
+		  close(out_fd);
+		  return EXIT_FAILURE;
+		}
+
 		fprintf(stderr,"Moving [%d -- %d) particles from input file = `%s' to outputfile = `%s' (nwritten so far = %d)\n",
 				fmap->input_file_start_particle[i],
 				fmap->input_file_end_particle[i],
@@ -191,7 +199,6 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 				fmap->output_file_nwritten[i]);
 
         int in_fd = open(filename, O_RDONLY);
-
         /* Number of particles written to this output file so far (assuming serial access) */
 		fprintf(stderr,"Calling copy_all_dmfields_from_gadget_snapshot....\n");
         status = copy_all_dmfields_from_gadget_snapshot(in_fd, out_fd,
@@ -203,7 +210,8 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
             close(in_fd);close(out_fd);
             return status;
         }
-		fprintf(stderr,"Calling copy_all_dmfields_from_gadget_snapshot....done\n\n");
+		nwritten += (fmap->input_file_end_particle[i] - fmap->input_file_start_particle[i]);
+		fprintf(stderr,"Calling copy_all_dmfields_from_gadget_snapshot....done. (nwritten = %d)\n\n",nwritten);
 		
         status = close(in_fd);
         if(status < 0) {
@@ -212,7 +220,6 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
             perror(NULL);
             return status;
         }
-        
         
         outhdr.npart[1] += (fmap->input_file_end_particle[i] - fmap->input_file_start_particle[i]);
     }
@@ -224,6 +231,12 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         perror(NULL);
         return status;
     }
+
+	if(outhdr.npart[1] != fmap->numpart){
+	  fprintf(stderr,"Error: Number of particles output (=%d) do not equal the number of particles in file mapping (=%"PRId64")\n",
+			  outhdr.npart[1], fmap->numpart);
+	  return EXIT_FAILURE;
+	}
 
     fp = fopen(outfilename, "r+");
     if(fp == NULL) {
@@ -269,9 +282,9 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 	  fprintf(stderr,"Output file = `%s' number of DM particles = %d (on ThisTask = %d)\n",
                 outfilename, outhdr.npart[1], ThisTask);
         return EXIT_FAILURE;
-    }
-        
-    
+    } 
+	fprintf(stderr, ANSI_COLOR_GREEN "Finished writing file `%s' (bytes = %ld, numpart = %d) on task=%d"ANSI_COLOR_RESET"\n", 
+			outfilename, filesize, outhdr.npart[1], ThisTask);
     return EXIT_SUCCESS;
 }
 
