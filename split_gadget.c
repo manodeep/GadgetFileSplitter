@@ -280,7 +280,6 @@ int split_gadget(const char *filebase, const char *outfilebase, const int noutfi
         return EXIT_FAILURE;
     }
 
-
 	/* Particle mappings have been generated -> now do the actual data-transfer */
 	int interrupted=0, numdone=0, totnumdone=0;
 	

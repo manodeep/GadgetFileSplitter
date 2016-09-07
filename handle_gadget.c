@@ -63,7 +63,7 @@ ssize_t find_id_bytes(const char *filebase)
     int status = fseeko(fp,offset,SEEK_CUR);
     if(status < 0) {
         fprintf(stderr,"Error: Could not seek %lld bytes into file `%s' while trying to figure out the number of bytes in each particle ID\n",
-                offset, filename);
+                (long long) offset, filename);
         return -1;
     }
     nread = my_fread(&dummy, sizeof(dummy), 1, fp);
@@ -82,7 +82,7 @@ ssize_t find_id_bytes(const char *filebase)
         fprintf(stderr,"Error: Number of bytes in particle ID should be 4 or 8. Total number of bytes corresponding to %u particles in file `%s' is %u\n"
                 "npart * 4 = %zu npart * 8 = %zu does not equal the total number of bytes. Is the input file corrupted ?\n",
                 npart, filename, dummy, npart * sizeof(int32_t),  npart * sizeof(int64_t));
-    }
+    } 
     
     fclose(fp);
     return id_bytes;
@@ -253,8 +253,8 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         }
         
     }
-    rewind(fp);
-    long filesize = fseek(fp, 0, SEEK_END);
+	my_fseek(fp, 0, SEEK_END);
+    long filesize = ftell(fp);
     fclose(fp);
 
     long expected_file_size = 2*sizeof(int) + sizeof(struct io_header) +
@@ -263,9 +263,9 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         2*sizeof(int) + outhdr.npart[1]*id_bytes;
 
     if(filesize != expected_file_size) {
-        fprintf(stderr,"Error: Expected file size is %ld but after finishing writing the entire file contains %ld bytes\n",
-                filesize, expected_file_size);
-        fprintf(stderr,"Output file = `%s' number of DM particles = %d (on ThisTask = %d)\n",
+	  fprintf(stderr,"Error: Expected file size is %ld but after finishing writing the entire file contains %ld bytes\n",
+			  expected_file_size,filesize);
+	  fprintf(stderr,"Output file = `%s' number of DM particles = %d (on ThisTask = %d)\n",
                 outfilename, outhdr.npart[1], ThisTask);
         return EXIT_FAILURE;
     }
