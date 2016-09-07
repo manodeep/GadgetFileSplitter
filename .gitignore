@@ -32,4 +32,7 @@ gadget_file_splitter
 # Debug files
 *.dSYM/
 *.su
+
+# Misc
 xx*
+*~
