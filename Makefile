@@ -1,4 +1,4 @@
-CC:=gcc
+CC:=mpicc
 
 TARGET:=gadget_file_splitter
 SRC:=main.c filesplitter.c utils.c handle_gadget.c split_gadget.c progressbar.c mpi_wrapper.c
@@ -13,8 +13,8 @@ include common.mk
 
 all: $(TARGET) $(SRC) $(INCL) Makefile
 
-%.o:%.c Makefile
-	$(CC) $(CCFLAGS) $(OPTIONS) $(OPTIMIZE) -c $< -o $@
+%.o:%.c Makefile common.mk $(INCL)
+	$(CC) $(OPTIONS) $(CCFLAGS) $(OPTIMIZE) -c $< -o $@
 
 $(TARGET): $(OBJS)
 	$(CC) $(CLINK) $^ -o $@
