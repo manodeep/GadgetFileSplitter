@@ -16,6 +16,14 @@
 
 #define MAXLEN (1024)
 
+int check_if_file_exists(const char *outfile);
+int write_hdr_to_stream(FILE *fp, struct io_header *header);
+int write_front_and_end_padding_bytes_to_stream(uint32_t dummy, FILE *fp);
+off_t get_offset_from_npart(const int32_t npart, field_type field);
+int copy_all_dmfields_from_gadget_snapshot(file_copy_union *inp, file_copy_union *out, const int32_t start, const int32_t end, 
+										   const int32_t nwritten, const size_t id_bytes, const file_copy_options copy_kind);
+
+
 ssize_t find_id_bytes(const char *filebase)
 {
     char filename[MAXLEN];
@@ -93,7 +101,6 @@ off_t get_offset_from_npart(const int32_t npart, field_type field)
     off_t pos_offset = sizeof(struct io_header) + 2*sizeof(int);
     off_t vel_offset = pos_offset + 3*npart*sizeof(float) + 2*sizeof(int);
     off_t id_offset = vel_offset + 3*npart*sizeof(float) + 2*sizeof(int);
-
     off_t offset;
     switch(field) {
     case(POS):offset = pos_offset;break;
@@ -108,12 +115,12 @@ off_t get_offset_from_npart(const int32_t npart, field_type field)
     return offset;
 }
 
-int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t start, const int32_t end, 
+int copy_all_dmfields_from_gadget_snapshot(file_copy_union *inp, file_copy_union *out, const int32_t start, const int32_t end, 
 										   const int32_t nwritten, const size_t id_bytes, const file_copy_options copy_kind)
 {
     const int32_t npart = end - start;//end is not inclusive -> that's why npart = end - start rather than npart = end - start + 1
     const long sz = sysconf(_SC_PAGESIZE);
-    const size_t bufsize =  sz > 0 ? (size_t) 4*sz:4*4096;
+    const size_t bufsize =  sz > 0 ? (size_t) sz:4096;
     void *buf = malloc(bufsize);
     if(buf == NULL) {
         return EXIT_FAILURE;
@@ -129,7 +136,7 @@ int copy_all_dmfields_from_gadget_snapshot(int in_fd, int out_fd, const int32_t 
         const size_t bytes_per_field = field == ID ? id_bytes:3*sizeof(float);
         const size_t bytes = npart * bytes_per_field;
 		fprintf(stderr,"Copying %zu bytes for field = %d (POS=%d VEL=%d ID=%d)...\n",bytes, field, POS, VEL, ID);
-        int status = filesplitter(in_fd, out_fd, input_offset, output_offset, bytes, buf, bufsize, copy_kind);
+        int status = filesplitter(inp, out, input_offset, output_offset, bytes, buf, bufsize, copy_kind);
         if(status != EXIT_SUCCESS) {
             free(buf);
             return status;
@@ -194,7 +201,30 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         fclose(fp);
         return status;
     }
+    /* Now write out the padding bytes for each field (pos/vel/id)*/
+    for(field_type field = POS;field<NUM_FIELDS;field++) {
+        const off_t offset = get_offset_from_npart(outhdr.npart[1], field);
+        status = fseeko(fp, offset, SEEK_SET);
+        if(status < 0) {
+            fprintf(stderr,"Could not seek to offset = %ld while writing (front) padding bytes for field = %u (POS = %u, VEL = %u, ID=%u)\n",
+                    (long) offset, field, POS, VEL, ID);
+            return EXIT_FAILURE;
+        }
+        const size_t bytes_per_field = field == ID ? id_bytes:3*sizeof(float);
+        const size_t dummy = outhdr.npart[1] * bytes_per_field;
+        status = write_front_and_end_padding_bytes_to_stream(dummy, fp);
+        if(status != EXIT_SUCCESS) {
+            return status;
+        }
+    }
     fclose(fp);//closed output file
+
+	file_copy_union output_filehandler;
+	status = initialize_file_copy(&output_filehandler, copy_kind, outfilename, WRITE_ONLY_MODE);
+	if(status != EXIT_SUCCESS) {
+	  return status;
+	}
+
 	outhdr.npart[1] = 0;
 
     int out_fd = open(outfilename, O_WRONLY);
@@ -223,40 +253,35 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 				outfilename,
 				fmap->output_file_nwritten[i]);
 
-        int in_fd = open(filename, O_RDONLY);
+		file_copy_union input_filehandler;
+        status = initialize_file_copy(&input_filehandler, copy_kind, filename, READ_ONLY_MODE);
+
         /* Number of particles written to this output file so far (assuming serial access) */
 		fprintf(stderr,"Calling copy_all_dmfields_from_gadget_snapshot....\n");
-        status = copy_all_dmfields_from_gadget_snapshot(in_fd, out_fd,
+        status = copy_all_dmfields_from_gadget_snapshot(&input_filehandler, &output_filehandler,
                                                         fmap->input_file_start_particle[i],
                                                         fmap->input_file_end_particle[i],
                                                         fmap->output_file_nwritten[i],
                                                         id_bytes,
 														copy_kind);
         if(status != EXIT_SUCCESS) {
-            close(in_fd);close(out_fd);
-            return status;
+		  
+		  return status;
         }
 		nwritten += (fmap->input_file_end_particle[i] - fmap->input_file_start_particle[i]);
 		fprintf(stderr,"Calling copy_all_dmfields_from_gadget_snapshot....done. (nwritten = %d)\n\n",nwritten);
-		
-        status = close(in_fd);
-        if(status < 0) {
-            fprintf(stderr,"Error while closing output file = `%s' opened in read-only mode. This is strange\n"
-                    "Check the system error message being printed out next\n", filename);
-            perror(NULL);
-            return status;
-        }
-        
+
+		status = finalize_file_copy(&input_filehandler, copy_kind);
+		if(status != EXIT_SUCCESS) {
+		  return status;
+		}
         outhdr.npart[1] += (fmap->input_file_end_particle[i] - fmap->input_file_start_particle[i]);
     }
 
-    status = close(out_fd);
-    if(status < 0) {
-        fprintf(stderr,"Error while closing output file = `%s'. This really should not happen since disk space was "
-                "already reserved for the file.\nCheck the system error message being printed out next\n",  outfilename);
-        perror(NULL);
-        return status;
-    }
+	status = finalize_file_copy(&output_filehandler, copy_kind);
+	if(status != EXIT_SUCCESS) {
+	  return status;
+	}
 
 	if(outhdr.npart[1] != fmap->numpart){
 	  fprintf(stderr,"Error: Number of particles output (=%d) do not equal the number of particles in file mapping (=%"PRId64")\n",
@@ -264,37 +289,26 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 	  return EXIT_FAILURE;
 	}
 
-    fp = fopen(outfilename, "r+");
+    fp = fopen(outfilename, "r");
     if(fp == NULL) {
         fprintf(stderr,"Error: Very strange behaviour - just closed this file = `%s' but can not seem to re-open it\n",
                 outfilename);
         perror(NULL);
-    }
-    status = write_hdr_to_stream(fp, &outhdr);
-    if(status != EXIT_SUCCESS) {
-        fclose(fp);
-        return status;
+		return EXIT_FAILURE;
     }
 
-    /* Now write out the padding bytes for each field (pos/vel/id)*/
-    for(field_type field = POS;field<NUM_FIELDS;field++) {
-        const off_t offset = get_offset_from_npart(outhdr.npart[1], field);
-        status = fseeko(fp, offset, SEEK_SET);
-        if(status < 0) {
-            fprintf(stderr,"Could not seek to offset = %ld while writing (front) padding bytes for field = %u (POS = %u, VEL = %u, ID=%u)\n",
-                    (long) offset, field, POS, VEL, ID);
-            return EXIT_FAILURE;
-        }
-        const size_t bytes_per_field = field == ID ? id_bytes:3*sizeof(float);
-        const size_t dummy = outhdr.npart[1] * bytes_per_field;
-        status = write_front_and_end_padding_bytes_to_stream(dummy, fp);
-        if(status != EXIT_SUCCESS) {
-            return status;
-        }
-        
-    }
-	my_fseek(fp, 0, SEEK_END);
+	status = fseek(fp, 0, SEEK_END);
+	if(status < 0) {
+	  fprintf(stderr,"Error: Could not seek to the end of the file `%s'\n", outfilename);
+	  perror(NULL);
+	  return status;
+	}
     long filesize = ftell(fp);
+	if(filesize < 0) {
+	  fprintf(stderr,"Error: Could not get file pointer offset for file `%s' (trying to get total filesize)\n", outfilename);
+	  perror(NULL);
+	  return filesize;
+	}
     fclose(fp);
 
     if(filesize != expected_file_size) {
@@ -306,6 +320,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
     } 
 	fprintf(stderr, ANSI_COLOR_GREEN "Finished writing file `%s' (bytes = %ld, numpart = %d) on task=%d"ANSI_COLOR_RESET"\n", 
 			outfilename, filesize, outhdr.npart[1], ThisTask);
+
     return EXIT_SUCCESS;
 }
 

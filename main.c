@@ -10,7 +10,7 @@ int main(int argc, char **argv)
 {
     char *input_filebase=NULL, *output_filebase=NULL;
     int noutfiles;
-    const char argnames[][30]={"input_filebase","output_filebase","noutfiles"};
+    const char argnames[][30]={"Input filebase","Output filebase","Number of output files", "Copy method"};
     int nargs=sizeof(argnames)/(sizeof(char)*30);
 
 #ifdef USE_MPI
@@ -44,6 +44,13 @@ int main(int argc, char **argv)
     input_filebase=argv[1];
     output_filebase=argv[2];
     noutfiles=atoi(argv[3]);
+	int copy_type = atoi(argv[4]);
+	if(copy_type >= NUM_FCPY_OPT) {
+	  fprintf(stderr,"Error: Invalid value = %d for copy method. Must be in range [0, %d) \n",
+			  copy_type, NUM_FCPY_OPT);
+	  Printhelp();
+	  return EXIT_FAILURE;
+	}
     
 	if(ThisTask == 0) {
 	  fprintf(stderr,"Running `%s' with the parameters \n",argv[0]);
@@ -59,7 +66,8 @@ int main(int argc, char **argv)
 	  fprintf(stderr,"\t\t -------------------------------------\n");
 	}
 
-    int status = split_gadget(input_filebase, output_filebase, noutfiles, PRDWR);
+	file_copy_options copy_kind = copy_type;
+    int status = split_gadget(input_filebase, output_filebase, noutfiles, copy_kind);
 #ifdef USE_MPI
 	if(status != EXIT_SUCCESS) {
 	  MPI_Abort(MPI_COMM_WORLD, status);
@@ -77,9 +85,11 @@ void Printhelp(void)
     fprintf(stderr,"   --- ./gadget_file_splitter input_filebase output_filebase noutputfiles\n") ;
     fprintf(stderr,"   --- Splits a multi-file Gadget snapshot file into so that all of the\n");
     fprintf(stderr,"       new chunks contain roughly the same number of particles\n");
-    fprintf(stderr,"     * input_filebase     = Basename of the input files (full-path)\n") ;
-    fprintf(stderr,"     * output_filebase    = Basename of the output files (full-path)\n");
-    fprintf(stderr,"     * noutputfiles       = Number of files to split into\n") ;
-    fprintf(stderr,"=========================================================================\n") ;
+    fprintf(stderr,"     * Input filebase           = Basename of the input files (full-path)\n") ;
+    fprintf(stderr,"     * Output filebase          = Basename of the output files (full-path)\n");
+    fprintf(stderr,"     * Number of output files   = Number of files to split into\n") ;
+	fprintf(stderr,"     * Copy strategy            = (pread = %d, mmap + memcpy = %d, fread = %d\n",
+			PRDWR, MEMCP, FRDWR) ;	
+    fprintf(stderr,"=============================================================================\n") ;
 
 }
