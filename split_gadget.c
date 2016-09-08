@@ -24,6 +24,7 @@ int allocate_file_mapping(struct file_mapping *fmap, const int64_t numfiles)
         fprintf(stderr,"Error In %s> Input pointer can not be NULL\n",__FUNCTION__);
         return EXIT_FAILURE;
     }
+
     size_t totbytes = 0;
     fmap->numfiles = numfiles;
     size_t bytes = sizeof(*(fmap->input_file_id)) * numfiles;
@@ -34,7 +35,7 @@ int allocate_file_mapping(struct file_mapping *fmap, const int64_t numfiles)
     fmap->input_file_start_particle = malloc(bytes);
     totbytes += bytes;
     
-    bytes = sizeof(*(fmap->input_file_end_particle) * numfiles);
+    bytes = sizeof(*(fmap->input_file_end_particle)) * numfiles;
     fmap->input_file_end_particle = malloc(bytes);
     totbytes += bytes;
 
