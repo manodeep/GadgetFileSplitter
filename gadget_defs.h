@@ -28,13 +28,13 @@ struct io_header
 };
 
 struct file_mapping{
-    int32_t *input_file_id;/* the input file id -> corresponds to the rank of the CPU that wrote out this snapshot/IC file */
-    int32_t *input_file_start_particle;/* which particle to start outputting from (inclusive)*/
-    int32_t *input_file_end_particle;/* which particle to end outputting at (excluse). Loops should be of the form */
+  int32_t *input_file_id;/* the input file id -> corresponds to the rank of the CPU that wrote out this snapshot/IC file */
+  int32_t *input_file_start_particle;/* which particle to start outputting from (inclusive)*/
+  int32_t *input_file_end_particle;/* which particle to end outputting at (excluse). Loops should be of the form */
     /* Loops to output the particles should be of this form  for(i=input_file_start_particle[k];i<input_file_end_particle[k];i++)*/ 
-    int32_t *output_file_nwritten;/*For multiple input files, contains the cumulative sum of the particles written so far (must be <= numpart) */
-    int64_t numpart;/* number of particles in this output file*/
-    int64_t numfiles;//I could declare this as int but there would be 4 bytes of padding 
+  int32_t *output_file_nwritten;/*For multiple input files, contains the cumulative sum of the particles written so far (must be <= numpart) */
+  int32_t numpart;/* number of particles in this output file*/
+  int32_t numfiles;/* number of input files contributing to this output file */
 };
 
 typedef enum {

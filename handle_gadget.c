@@ -19,9 +19,10 @@
 int check_if_file_exists(const char *outfile);
 int write_hdr_to_stream(FILE *fp, struct io_header *header);
 int write_front_and_end_padding_bytes_to_stream(uint32_t dummy, FILE *fp);
-off_t get_offset_from_npart(const int32_t npart, field_type field);
+off_t get_offset_from_npart(const int32_t start_npart, const int32_t nparttotal, field_type field, const size_t id_bytes);
 int copy_all_dmfields_from_gadget_snapshot(file_copy_union *inp, file_copy_union *out, const int32_t start, const int32_t end, 
-										   const int32_t nwritten, const size_t id_bytes, const file_copy_options copy_kind);
+										   const int32_t inp_nparttotall,  const int32_t nwritten, const int32_t out_nparttotal,
+										   const size_t id_bytes, const file_copy_options copy_kind);
 
 
 ssize_t find_id_bytes(const char *filebase)
@@ -96,31 +97,36 @@ ssize_t find_id_bytes(const char *filebase)
     return id_bytes;
 }
 
-off_t get_offset_from_npart(const int32_t npart, field_type field)
+off_t get_offset_from_npart(const int32_t start_npart, const int32_t nparttotal, field_type field, const size_t id_bytes)
 {
-    off_t pos_offset = sizeof(struct io_header) + 2*sizeof(int);
-    off_t vel_offset = pos_offset + 3*npart*sizeof(float) + 2*sizeof(int);
-    off_t id_offset = vel_offset + 3*npart*sizeof(float) + 2*sizeof(int);
-    off_t offset;
-	fprintf(stderr,"In %s> ThisTask = %d npart = %d field = %d pos_offset = %jd vel_offset = %jd id_offset = %jd. ",
-			__FUNCTION__, ThisTask, npart, field, pos_offset, vel_offset, id_offset);
+  
+
+  off_t pos_start_offset = sizeof(int) + sizeof(struct io_header) + sizeof(int) + sizeof(int);
+  off_t vel_start_offset = pos_start_offset + 3*nparttotal*sizeof(float) + sizeof(int) + sizeof(int);
+  off_t  id_start_offset = vel_start_offset + 3*nparttotal*sizeof(float) + sizeof(int) + sizeof(int);
+  off_t offset;
 
     switch(field) {
-    case(POS):offset = pos_offset;break;
-    case(VEL):offset = vel_offset;break;
-    case(ID):offset = id_offset;break;
+    case(POS):offset = pos_start_offset;break;
+    case(VEL):offset = vel_start_offset;break;
+    case(ID):offset = id_start_offset;break;
     default:
         fprintf(stderr,"Error: Unknown field type = %u (known fields are POS = %u VEL = %u ID = %u)\n",
                 field, POS, VEL, ID);
         offset=-1;
     }
-	fprintf(stderr,"Returning offset = %jd\n", offset);
+	if(offset > 0 && start_npart > 0) {
+	  const size_t bytes_per_field = field == ID ? id_bytes:3*sizeof(float);
+  	  offset += bytes_per_field*start_npart;
+	}
+
 
     return offset;
 }
 
 int copy_all_dmfields_from_gadget_snapshot(file_copy_union *inp, file_copy_union *out, const int32_t start, const int32_t end, 
-										   const int32_t nwritten, const size_t id_bytes, const file_copy_options copy_kind)
+										   const int32_t inp_nparttotall,  const int32_t nwritten, const int32_t out_nparttotal,
+										   const size_t id_bytes, const file_copy_options copy_kind)
 {
     const int32_t npart = end - start;//end is not inclusive -> that's why npart = end - start rather than npart = end - start + 1
     const long sz = sysconf(_SC_PAGESIZE);
@@ -132,8 +138,8 @@ int copy_all_dmfields_from_gadget_snapshot(file_copy_union *inp, file_copy_union
     
     /* Copy the pos/vel/id */
     for(field_type field = POS; field < NUM_FIELDS; field++) {
-	  const off_t output_offset = get_offset_from_npart(nwritten, field) + sizeof(int);
-	  const off_t input_offset = get_offset_from_npart(start, field) + sizeof(int);
+	  const off_t output_offset = get_offset_from_npart(nwritten, out_nparttotal, field, id_bytes);
+	  const off_t input_offset = get_offset_from_npart(start, inp_nparttotall, field, id_bytes);
         if(input_offset < 0 || output_offset < 0) {
             return EXIT_FAILURE;
         }
@@ -210,7 +216,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
     }
     /* Now write out the padding bytes for each field (pos/vel/id)*/
     for(field_type field = POS;field<NUM_FIELDS;field++) {
-        const off_t offset = get_offset_from_npart(outhdr.npart[1], field);
+	  const off_t offset = get_offset_from_npart(0, outhdr.npart[1], field, id_bytes) - sizeof(int);//offset for the beginning of padding byte 
         status = fseeko(fp, offset, SEEK_SET);
         if(status < 0) {
             fprintf(stderr,"Could not seek to offset = %ld while writing (front) padding bytes for field = %u (POS = %u, VEL = %u, ID=%u)\n",
@@ -224,7 +230,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
             return status;
         }
     }
-    fclose(fp);//closed output file
+    fclose(fp);//close output file
 
 	file_copy_union output_filehandler;
 	status = initialize_file_copy(&output_filehandler, copy_kind, outfilename, WRITE_ONLY_MODE);
@@ -267,9 +273,12 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         status = copy_all_dmfields_from_gadget_snapshot(&input_filehandler, &output_filehandler,
                                                         fmap->input_file_start_particle[i],
                                                         fmap->input_file_end_particle[i],
+														hdr.npart[1],
                                                         fmap->output_file_nwritten[i],
+														fmap->numpart,
                                                         id_bytes,
 														copy_kind);
+
         if(status != EXIT_SUCCESS) {
 		  
 		  return status;
@@ -290,7 +299,7 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 	}
 
 	if(outhdr.npart[1] != fmap->numpart){
-	  fprintf(stderr,"Error: Number of particles output (=%d) do not equal the number of particles in file mapping (=%"PRId64")\n",
+	  fprintf(stderr,"Error: Number of particles output (=%d) do not equal the number of particles in file mapping (=%d)\n",
 			  outhdr.npart[1], fmap->numpart);
 	  return EXIT_FAILURE;
 	}

@@ -141,13 +141,13 @@ int initialize_file_copy_with_pread(file_copy_union *un_fp, const char *fname, c
   }
 
   /* Some optimization about reads */
-  if(mode == READ_ONLY_MODE) {
-	int status = posix_fadvise(un_fp->fd, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_NOREUSE);
-	if(status < 0) {
-	  fprintf(stderr,"Warning: Could not set file read/write hints to the kernel\n");
-	  perror(NULL);
-	}
-  }
+  /* if(mode == READ_ONLY_MODE) { */
+  /* 	int status = posix_fadvise(un_fp->fd, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_NOREUSE); */
+  /* 	if(status < 0) { */
+  /* 	  fprintf(stderr,"Warning: Could not set file read/write hints to the kernel\n"); */
+  /* 	  perror(NULL); */
+  /* 	} */
+  /* } */
 
   return EXIT_SUCCESS;
 }
@@ -186,13 +186,13 @@ int initialize_file_copy_with_memcpy(file_copy_union *un_fp, const char *fname, 
   }
 
   /* Some optimization about reads */
-  if(mode == READ_ONLY_MODE) {
-	int status = posix_madvise(un_fp->fc, sb.st_size, POSIX_MADV_SEQUENTIAL);
-	if(status < 0) {
-	  fprintf(stderr,"Warning: Could not set file read/write hints to the kernel for the memory-map\n");
-	  perror(NULL);
-	}
-  }
+  /* if(mode == READ_ONLY_MODE) { */
+  /* 	int status = posix_madvise(un_fp->fc, sb.st_size, POSIX_MADV_SEQUENTIAL); */
+  /* 	if(status < 0) { */
+  /* 	  fprintf(stderr,"Warning: Could not set file read/write hints to the kernel for the memory-map\n"); */
+  /* 	  perror(NULL); */
+  /* 	} */
+  /* } */
 
   return EXIT_SUCCESS;
 }
