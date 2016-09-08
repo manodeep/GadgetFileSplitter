@@ -102,6 +102,9 @@ off_t get_offset_from_npart(const int32_t npart, field_type field)
     off_t vel_offset = pos_offset + 3*npart*sizeof(float) + 2*sizeof(int);
     off_t id_offset = vel_offset + 3*npart*sizeof(float) + 2*sizeof(int);
     off_t offset;
+	fprintf(stderr,"In %s> ThisTask = %d npart = %d field = %d pos_offset = %jd vel_offset = %jd id_offset = %jd. ",
+			__FUNCTION__, ThisTask, npart, field, pos_offset, vel_offset, id_offset);
+
     switch(field) {
     case(POS):offset = pos_offset;break;
     case(VEL):offset = vel_offset;break;
@@ -111,6 +114,7 @@ off_t get_offset_from_npart(const int32_t npart, field_type field)
                 field, POS, VEL, ID);
         offset=-1;
     }
+	fprintf(stderr,"Returning offset = %jd\n", offset);
 
     return offset;
 }
@@ -135,13 +139,16 @@ int copy_all_dmfields_from_gadget_snapshot(file_copy_union *inp, file_copy_union
         }
         const size_t bytes_per_field = field == ID ? id_bytes:3*sizeof(float);
         const size_t bytes = npart * bytes_per_field;
-		fprintf(stderr,"Copying %zu bytes for field = %d (POS=%d VEL=%d ID=%d)...\n",bytes, field, POS, VEL, ID);
+		fprintf(stderr,"Copying %zu bytes for field = %d (POS=%d VEL=%d ID=%d)...input_offset = %jd output_offset = %jd...\n",
+				bytes, field, POS, VEL, ID, input_offset, output_offset);
         int status = filesplitter(inp, out, input_offset, output_offset, bytes, buf, bufsize, copy_kind);
         if(status != EXIT_SUCCESS) {
             free(buf);
             return status;
         }
-		fprintf(stderr,"Copying %zu bytes for field = %d (POS=%d VEL=%d ID=%d).......done\n",bytes, field, POS, VEL, ID);
+		fprintf(stderr,"Copying %zu bytes for field = %d (POS=%d VEL=%d ID=%d)...input_offset = %jd output_offset = %jd......done\n",
+				bytes, field, POS, VEL, ID, input_offset, output_offset);
+
     }
     free(buf);
     return EXIT_SUCCESS;
@@ -227,7 +234,6 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
 
 	outhdr.npart[1] = 0;
 
-    int out_fd = open(outfilename, O_WRONLY);
 	fprintf(stderr,"\n");
 	int32_t nwritten = 0;
     for(int64_t i=0;i<fmap->numfiles;i++) {
@@ -236,13 +242,13 @@ int gadget_snapshot_create(const char *filebase, const char *outfilename, struct
         struct io_header hdr;
         status = read_header(filename, &hdr);
         if(status != EXIT_SUCCESS) {
-            close(out_fd);
-            return status;
+		  finalize_file_copy(&output_filehandler, copy_kind);
+		  return status;
         }
 		if(nwritten != fmap->output_file_nwritten[i]) {
 		  fprintf(stderr,"Error: Mismatch between the number of particles written (=%d) out so far and what is claimed by the particle mapping =(%d)\n",
 				  nwritten, fmap->output_file_nwritten[i]);
-		  close(out_fd);
+		  finalize_file_copy(&output_filehandler, copy_kind);
 		  return EXIT_FAILURE;
 		}
 
